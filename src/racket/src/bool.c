@@ -52,8 +52,8 @@ static Scheme_Object *chaperone_of (int argc, Scheme_Object *argv[]);
 static Scheme_Object *impersonator_of (int argc, Scheme_Object *argv[]);
 
 typedef struct Equal_Info {
-  long depth; /* always odd, so it looks like a fixnum */
-  long car_depth; /* always odd => fixnum */
+  intptr_t depth; /* always odd, so it looks like a fixnum */
+  intptr_t car_depth; /* always odd => fixnum */
   Scheme_Hash_Table *ht;
   Scheme_Object *recur;
   Scheme_Object *next, *next_next;
@@ -434,7 +434,7 @@ int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql)
       return 1;
     return vector_equal(obj1, obj2, eql);
   } else if (SCHEME_FLVECTORP(obj1)) {
-    long l1, l2, i;
+    intptr_t l1, l2, i;
     l1 = SCHEME_FLVEC_SIZE(obj1);
     l2 = SCHEME_FLVEC_SIZE(obj2);
     if (l1 == l2) {
@@ -448,7 +448,7 @@ int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql)
     return 0;
   } else if (SCHEME_BYTE_STRINGP(obj1)
 	     || SCHEME_GENERAL_PATHP(obj1)) {
-    int l1, l2;
+    intptr_t l1, l2;
     if ((eql->for_chaperone == 1) && (!SCHEME_IMMUTABLEP(obj1)
                                       || !SCHEME_IMMUTABLEP(obj2)))
       return 0;
@@ -457,7 +457,7 @@ int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql)
     return ((l1 == l2)
 	    && !memcmp(SCHEME_BYTE_STR_VAL(obj1), SCHEME_BYTE_STR_VAL(obj2), l1));
   } else if (SCHEME_CHAR_STRINGP(obj1)) {
-    int l1, l2;
+    intptr_t l1, l2;
     if ((eql->for_chaperone == 1) && (!SCHEME_IMMUTABLEP(obj1)
                                       || !SCHEME_IMMUTABLEP(obj2)))
       return 0;
@@ -588,6 +588,9 @@ int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql)
     if (union_check(obj1, obj2, eql))
       return 1;
     return scheme_bucket_table_equal_rec((Scheme_Bucket_Table *)obj1, (Scheme_Bucket_Table *)obj2, eql);
+  } else if (SCHEME_CPTRP(obj1)) {
+    return (((char *)SCHEME_CPTR_VAL(obj1) + SCHEME_CPTR_OFFSET(obj1))
+            == ((char *)SCHEME_CPTR_VAL(obj2) + SCHEME_CPTR_OFFSET(obj2)));
   } else if (SAME_TYPE(SCHEME_TYPE(obj1), scheme_wrap_chunk_type)) {
     return vector_equal(obj1, obj2, eql);
   } else if (SAME_TYPE(SCHEME_TYPE(obj1), scheme_resolved_module_path_type)) {
@@ -612,7 +615,7 @@ int is_equal (Scheme_Object *obj1, Scheme_Object *obj2, Equal_Info *eql)
 
 static int vector_equal(Scheme_Object *vec1, Scheme_Object *vec2, Equal_Info *eql)
 {
-  int i, len;
+  intptr_t i, len;
 
   len = SCHEME_VEC_SIZE(vec1);
   if (len != SCHEME_VEC_SIZE(vec2))

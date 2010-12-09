@@ -70,6 +70,8 @@
   (t  2 'add1_byte_int  (_fun _byte -> _int ) 1)
   (t  2 'add1_int_byte  (_fun _int  -> _byte) 1)
   (t  2 'add1_byte_byte (_fun _byte -> _byte) 1)
+  (t  -1 'add1_int_int   (_fun _int  -> _int ) -2)
+  (t  -1 'add1_int_int   (_fun _int  -> _fixint ) -2)
   ;; ---
   (t 12 'decimal_int_int_int    (_fun _int  _int  -> _int ) 1 2)
   (t 12 'decimal_byte_int_int   (_fun _byte _int  -> _int ) 1 2)
@@ -238,6 +240,21 @@
 (let ([v (malloc _pointer)])
   (ptr-set! v _pointer (ptr-add #f 107))
   (test 107 ptr-ref v _intptr))
+
+;; Test equality and hashing of c pointers:
+(let ([seventeen1 (cast 17 _long _pointer)]
+      [seventeen2 (cast 17 _long _pointer)]
+      [seventeen3 (ptr-add (cast 13 _long _pointer) 4)]
+      [sixteen (cast 16 _long _pointer)])
+  (test #t equal? seventeen1 seventeen2)
+  (test #t equal? seventeen1 seventeen3)
+  (test #f equal? sixteen seventeen1)
+  (test #t = (equal-hash-code seventeen1) (equal-hash-code seventeen2))
+  (test #t = (equal-hash-code seventeen1) (equal-hash-code seventeen3))
+  (let ([ht (make-hash)])
+    (hash-set! ht seventeen1 'hello)
+    (test 'hello hash-ref ht seventeen2 #f)
+    (test 'hello hash-ref ht seventeen3 #f)))
 
 (delete-test-files)
 

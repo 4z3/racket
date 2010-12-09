@@ -219,6 +219,7 @@
           ;; responsiveness (where too many updates might not get 
           ;; through if the canvas is mostly in suspended-refresh 
           ;; mode for scene changes):
+          #;
           (send c flush)))
       
       ;; ----------------------------------------------------------------------
@@ -263,14 +264,17 @@
                      (begin
                        (set! nw (stop-the-world-world nw))
                        (send world set tag nw)
-                       (when last-picture (last-draw))
-                       (when draw (pdraw))
+                       (cond
+                         [last-picture (last-draw)]
+                         [draw (pdraw)])
                        (callback-stop! 'name)
                        (enable-images-button))
-                     (let ([changed-world? (send world set tag nw)])
+                     (let ([changed-world? (send world set tag nw)]
+                           [stop? (pstop)])
                        ;; this is the old "Robby optimization" see checked-cell:
                        ; unless changed-world? 
-                       (when draw 
+                       (cond
+                         [(and draw (not stop?))
                          (cond
                            [(not drawing)
                             (set! drawing #t)
@@ -285,11 +289,13 @@
                             ;; high!!  the scheduled callback didn't fire
                             (queue-callback (lambda () (d)) #t)]
                            [else 
-                            (set! draw# (- draw# 1))]))
-                       (when (pstop)
-                         (when last-picture (last-draw))
-                         (callback-stop! 'name)
-                         (enable-images-button))
+                            (set! draw# (- draw# 1))])]
+                         [stop?
+                          (cond 
+                            [last-picture (last-draw)]
+                            [draw (pdraw)])
+                          (callback-stop! 'name)
+                          (enable-images-button)])
                        changed-world?))))))))
       
       ;; tick, tock : deal with a tick event for this world 
@@ -340,11 +346,13 @@
           (stop! (if re-raise e (send world get)))))
       
       (define/public (start!)
-        (queue-callback
-         (lambda ()
-           (with-handlers ([exn? (handler #t)])
-             (when draw (show-canvas))
-             (when register (register-with-host))))))
+        (with-handlers ([exn? (handler #t)])
+          (when draw (show-canvas))
+          (when register (register-with-host))
+          (define w (send world get))
+          (cond
+            [(stop w) (stop! w)]
+            [(stop-the-world? w) (stop! (stop-the-world-world w))])))
       
       (define/public (stop! w)
         (set! live #f)
@@ -353,11 +361,7 @@
       ;; -------------------------------------------------------------------------
       ;; initialize the world and run 
       (super-new)
-      (start!)
-      (let ([w (send world get)])
-        (cond
-          [(stop w) (stop! w)]
-          [(stop-the-world? w) (stop! (stop-the-world-world w))]))))))
+      (start!)))))
 
 ; (define make-new-world (new-world world%))
 

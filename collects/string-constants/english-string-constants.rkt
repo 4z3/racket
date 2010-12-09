@@ -134,8 +134,7 @@ please adhere to these guidelines:
  (web-materials "Related Web Sites") ;; menu item title
  (tool-web-sites "Tool Web Sites")   ;; menu item title
  (plt-homepage "Racket")
- (how-to-use-scheme "How to Use Scheme") ;; title of a book.
- (teachscheme!-homepage "TeachScheme!") ;; probably this should be a `word' in all languages
+ (pbd-homepage "Program by Design")
 
  ;;; bug report form
  (cancel-bug-report? "Cancel Bug Report?")
@@ -448,13 +447,15 @@ please adhere to these guidelines:
  (show-interactions-on-execute "Automatically open interactions window when running a program")
  (switch-to-module-language-automatically "Automatically switch to the module language when opening a module")
  (interactions-beside-definitions "Put the interactions window beside the definitions window") ;; in preferences, below the checkbox one line above this one
- (show-line-numbers "Show Line Numbers")
- (hide-line-numbers "Hide Line Numbers")
+ (show-line-numbers "Show line numbers")
+ (show-line-numbers/menu "Show Line Numbers")  ;; just like the above, but capitalized for appearance in a menu item
+ (hide-line-numbers/menu "Hide Line Numbers")
  (limit-interactions-size "Limit interactions size")
  (background-color "Background Color")
  (default-text-color "Default text") ;; used for configuring colors, but doesn't need the word "color"
  (choose-a-background-color "Please choose a background color")
  (revert-to-defaults "Revert to Defaults")
+ (undo-changes "Undo Changes and Close") ;; used in the preferences dialog to undo preference changes
   
   (black-on-white-color-scheme "Black on White") ;; these two appear in the color preferences dialog on butttons
   (white-on-black-color-scheme "White on Black") ;; clicking the buttons changes the color schemes to some defaults that've been set up.
@@ -599,7 +600,8 @@ please adhere to these guidelines:
  (edit-menu "Edit")
  (help-menu "Help")
  (windows-menu "Windows")
- 
+ (tabs-menu "Tabs") ;; this is the name of the "Windows" menu under linux & windows
+  
  ;;; menus
  ;;; - in menu labels, the & indicates a alt-key based shortcut.
  ;;; - sometimes, things are stuck in the middle of 
@@ -730,6 +732,7 @@ please adhere to these guidelines:
 
   ;; windows menu
  (windows-menu-label "&Windows")
+ (tabs-menu-label "&Tabs") ;; this is the name of the menu under linux & windows
  (minimize "Minimize") ;; minimize and zoom are only used under mac os x
  (zoom "Zoom")
  (bring-frame-to-front "Bring Frame to Front")       ;;; title of dialog

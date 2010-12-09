@@ -243,25 +243,25 @@ typedef struct Scheme_Future_Thread_State {
   int id;
   int worker_gc_counter;
   mzrt_sema *worker_can_continue_sema;
-  long runstack_size;
+  intptr_t runstack_size;
 
   volatile int *fuel_pointer;
-  volatile unsigned long *stack_boundary_pointer;
+  volatile uintptr_t *stack_boundary_pointer;
   volatile int *need_gc_pointer;
 
   Scheme_Thread *thread;
 
-  unsigned long gen0_start;
-  unsigned long gen0_size;
-  unsigned long gen0_initial_offset;
+  uintptr_t gen0_start;
+  uintptr_t gen0_size;
+  uintptr_t gen0_initial_offset;
 } Scheme_Future_Thread_State;
 
 THREAD_LOCAL_DECL(static Scheme_Future_State *scheme_future_state);
 THREAD_LOCAL_DECL(void *jit_future_storage[2]);
 
 #ifdef MZ_PRECISE_GC
-THREAD_LOCAL_DECL(extern unsigned long GC_gen0_alloc_page_ptr);
-THREAD_LOCAL_DECL(extern unsigned long GC_gen0_alloc_page_end);
+THREAD_LOCAL_DECL(extern uintptr_t GC_gen0_alloc_page_ptr);
+THREAD_LOCAL_DECL(extern uintptr_t GC_gen0_alloc_page_end);
 THREAD_LOCAL_DECL(extern int GC_gen0_alloc_only);
 #endif
 
@@ -434,7 +434,7 @@ static void init_future_thread(Scheme_Future_State *fs, int i)
 
   {
     Scheme_Object **rs_start, **rs;
-    long init_runstack_size = FUTURE_RUNSTACK_SIZE;
+    intptr_t init_runstack_size = FUTURE_RUNSTACK_SIZE;
     rs_start = scheme_alloc_runstack(init_runstack_size);
     rs = rs_start XFORM_OK_PLUS init_runstack_size;
     runstack_start = rs_start;
@@ -627,6 +627,7 @@ Scheme_Object *scheme_future(int argc, Scheme_Object *argv[])
   Scheme_Native_Closure *nc;
   Scheme_Native_Closure_Data *ncd;
   Scheme_Object *lambda = argv[0];
+  double time_of_start;
 
   /* Input validation */
   scheme_check_proc_arity("future", 0, 0, argc, argv);
@@ -669,6 +670,11 @@ Scheme_Object *scheme_future(int argc, Scheme_Object *argv[])
   if (ft->status != PENDING_OVERSIZE) {
     mzrt_mutex_lock(fs->future_mutex);
     enqueue_future(fs, ft);
+    
+    /* Log the spawn time */
+    time_of_start = scheme_get_inexact_milliseconds();
+    ft->time_of_start = time_of_start;
+
     /* Signal that a future is pending */
     mzrt_sema_post(fs->future_pending_sema);
     /* Alert the runtime thread, in case it wants to
@@ -722,6 +728,7 @@ static void future_in_runtime(future_t * volatile ft)
   Scheme_Thread *p = scheme_current_thread;  
   Scheme_Object * volatile retval;
   future_t * volatile old_ft;
+  double time_of_completion;
 
   old_ft = p->current_ft;
   p->current_ft = ft;
@@ -744,6 +751,8 @@ static void future_in_runtime(future_t * volatile ft)
   p->error_buf = savebuf;
   p->current_ft = old_ft;
 
+  time_of_completion = scheme_get_inexact_milliseconds();
+  ft->time_of_completion = time_of_completion;
   ft->work_completed = 1;
   ft->retval = retval;
   ft->status = FINISHED;
@@ -818,8 +827,16 @@ Scheme_Object *touch(int argc, Scheme_Object *argv[])
       {
         retval = ft->retval;
 
-        LOG("Successfully touched future %d\n", ft->id);
-
+        /* Log execution time */ 
+        if (scheme_log_level_p(scheme_main_logger, SCHEME_LOG_DEBUG)) {
+          scheme_log(scheme_main_logger, SCHEME_LOG_DEBUG, 0,
+                 "future: %d finished. start time: %f, finish time: %f (%f ms)", 
+                  ft->id, 
+                  ft->time_of_start, 
+                  ft->time_of_completion, 
+                  ft->time_of_completion - ft->time_of_start);
+        }
+        
         mzrt_mutex_unlock(fs->future_mutex);
         break;
       }
@@ -934,7 +951,7 @@ void *worker_thread_future_loop(void *arg)
 
   /* Set processor affinity */
   /*mzrt_mutex_lock(fs->future_mutex);
-      static unsigned long cur_cpu_mask = 1;
+      static uintptr_t cur_cpu_mask = 1;
     if (pthread_setaffinity_np(pthread_self(), sizeof(g_cur_cpu_mask), &g_cur_cpu_mask))
     {
     printf(
@@ -953,7 +970,7 @@ void *worker_thread_future_loop(void *arg)
   scheme_current_thread = fts->thread;
 
   scheme_fuel_counter = 1;
-  scheme_jit_stack_boundary = ((unsigned long)&v) - INITIAL_C_STACK_SIZE;
+  scheme_jit_stack_boundary = ((uintptr_t)&v) - INITIAL_C_STACK_SIZE;
 
   fts->need_gc_pointer = &scheme_future_need_gc_pause;
   fts->fuel_pointer = &scheme_fuel_counter;
@@ -1048,6 +1065,9 @@ void *worker_thread_future_loop(void *arg)
         /* Set the return val in the descriptor */
         ft->work_completed = 1;
         ft->retval = v;
+
+        /* Log future completion time */
+        ft->time_of_completion = scheme_get_inexact_milliseconds();
         
         /* In case of multiple values: */
         send_special_result(ft, v);
@@ -1194,16 +1214,16 @@ void scheme_check_future_work()
     if (ft && ft->want_lw) {
       void *storage[3];
 
-      (void)capture_future_continuation(ft, storage);
-
-      /* Signal the waiting worker thread that it
-         can continue doing other things: */
-      mzrt_mutex_lock(fs->future_mutex);
-      if (ft->can_continue_sema) {
-        mzrt_sema_post(ft->can_continue_sema);
-        ft->can_continue_sema = NULL;
+      if (capture_future_continuation(ft, storage)) {
+        /* Signal the waiting worker thread that it
+           can continue doing other things: */
+        mzrt_mutex_lock(fs->future_mutex);
+        if (ft->can_continue_sema) {
+          mzrt_sema_post(ft->can_continue_sema);
+          ft->can_continue_sema = NULL;
+        }
+        mzrt_mutex_unlock(fs->future_mutex);
       }
-      mzrt_mutex_unlock(fs->future_mutex);
     } else
       break;
   }
@@ -1256,7 +1276,7 @@ static void future_do_runtimecall(Scheme_Future_Thread_State *fts,
      to suspend wouldn't accomplish anything). */
   insist_to_suspend = !is_atomic;
   prefer_to_suspend = (insist_to_suspend || fs->future_queue_count);
-  
+
   if (prefer_to_suspend
       && GC_gen0_alloc_page_ptr 
       && capture_future_continuation(future, storage)) {
@@ -1328,20 +1348,20 @@ void scheme_rtcall_void_void_3args(const char *who, int src_type, prim_void_void
 
 #ifdef MZ_PRECISE_GC
 
-unsigned long scheme_rtcall_alloc(const char *who, int src_type)
+uintptr_t scheme_rtcall_alloc(const char *who, int src_type)
   XFORM_SKIP_PROC
 /* Called in future thread */
 {
   future_t *future;
-  unsigned long retval;
+  uintptr_t retval;
   Scheme_Future_Thread_State *fts = scheme_future_thread_state;
-  long align;
+  intptr_t align;
   
   align = GC_alloc_alignment();
 
   /* Do we actually still have space? */
   if (fts->gen0_start) {
-    long cur;
+    intptr_t cur;
     cur = GC_gen0_alloc_page_ptr;
     if (cur < (fts->gen0_start + (fts->gen0_size - 1) * align)) {
       if (cur & (align - 1)) {
@@ -1354,7 +1374,7 @@ unsigned long scheme_rtcall_alloc(const char *who, int src_type)
     }
   }
 
-  /* Grow nursery size as long as we don't trigger a GC */
+  /* Grow nursery size as intptr_t as we don't trigger a GC */
   if (fts->gen0_size < 16)
     fts->gen0_size <<= 1;
 
@@ -1506,7 +1526,7 @@ static void do_invoke_rtcall(Scheme_Future_State *fs, future_t *future)
 
     scheme_log(scheme_main_logger, SCHEME_LOG_DEBUG, 0,
                "future: %d waiting for runtime at %f: %s",
-               (long)future->thread_short_id,
+               (intptr_t)future->thread_short_id,
                future->time_of_request,
                src);
   }
@@ -1535,7 +1555,7 @@ static void do_invoke_rtcall(Scheme_Future_State *fs, future_t *future)
 #ifdef MZ_PRECISE_GC
     case SIG_ALLOC:
       {
-        unsigned long ret;
+        uintptr_t ret;
         ret = GC_make_jit_nursery_page(future->arg_i0);
         future->alloc_retval = ret;
         future->alloc_retval_counter = scheme_did_gc_count;

@@ -1174,7 +1174,7 @@ static Scheme_Object *guard_property(Scheme_Object *prop, Scheme_Object *v, Sche
     /* prop:procedure guard: */
     Scheme_Object *orig_v = v;
     if (SCHEME_INTP(v) || SCHEME_BIGNUMP(v)) {
-      long pos;
+      intptr_t pos;
 
       if (SCHEME_INTP(v))
 	pos = SCHEME_INT_VAL(v);
@@ -1216,7 +1216,7 @@ static Scheme_Object *guard_property(Scheme_Object *prop, Scheme_Object *v, Sche
     t->proc_attr = v;
 
     if (SCHEME_INTP(v)) {
-      long pos;
+      intptr_t pos;
       pos = SCHEME_INT_VAL(orig_v);
       if (!t->immutables || !t->immutables[pos]) {
         scheme_arg_mismatch("make-struct-type", 
@@ -1754,7 +1754,8 @@ Scheme_Object *scheme_extract_checked_procedure(int argc, Scheme_Object **argv)
     return NULL;
   }
 
-  if (SCHEME_CHAPERONE_STRUCTP(v) && scheme_is_struct_instance((Scheme_Object *)stype, v)) {
+  /* let chaperones use the slow path, for now */
+  if (SCHEME_STRUCTP(v) && scheme_is_struct_instance((Scheme_Object *)stype, v)) {
     checker = ((Scheme_Structure *)v)->slots[0];
     proc = ((Scheme_Structure *)v)->slots[1];
     

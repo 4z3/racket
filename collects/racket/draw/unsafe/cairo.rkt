@@ -14,9 +14,14 @@
    (ffi-lib "libcairo.2.dylib")]
   [(windows) 
    (ffi-lib "zlib1.dll")
+   (ffi-lib ,(if win64?
+		 "libintl-8.dll"
+		 "zlib1.dll"))
    (ffi-lib "libpng14-14.dll")
    (ffi-lib "libexpat-1.dll")
-   (ffi-lib "freetype6.dll")
+   (ffi-lib ,(if win64?
+		 "libfreetype-6.dll"
+		 "freetype6.dll"))
    (ffi-lib "libfontconfig-1.dll")
    (ffi-lib "libcairo-2.dll")])
 
@@ -199,6 +204,10 @@
   ;; The _fpointer argument is _cairo_write_func_t
   ;; but it's saved as a callback, so care is needed with
   ;; allocation.
+  (_fun  _fpointer _pointer _double* _double* -> _cairo_surface_t)
+  #:wrap (allocator cairo_surface_destroy))
+(define-cairo cairo_pdf_surface_create_for_stream 
+  ;; As above:
   (_fun  _fpointer _pointer _double* _double* -> _cairo_surface_t)
   #:wrap (allocator cairo_surface_destroy))
 (define/provide _cairo_write_func_t (_fun _pointer _pointer _uint -> _int))
